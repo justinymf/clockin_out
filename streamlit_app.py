@@ -1,68 +1,62 @@
 import streamlit as st
-import pandas as pd
-from datetime import datetime
 import streamlit.components.v1 as components
+from datetime import datetime
 
-st.set_page_config(page_title="Decathlon 打卡系統", layout="centered")
+# --- GPS 獲取組件 (加強版) ---
+def get_gps_location():
+    js_code = """
+    <script>
+    function getLocation() {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const coords = position.coords.latitude + "," + position.coords.longitude;
+                    window.parent.postMessage({type: 'streamlit:setComponentValue', value: coords}, '*');
+                },
+                (error) => {
+                    window.parent.postMessage({type: 'streamlit:setComponentValue', value: "Error: " + error.message}, '*');
+                }
+            );
+        }
+    }
+    getLocation();
+    </script>
+    """
+    components.html(js_code, height=0)
 
-# --- 2FA 模擬邏輯 ---
-if 'auth' not in st.session_state:
-    st.session_state.auth = False
+st.title("🕒 Decathlon 安全打卡系統")
 
-if not st.session_state.auth:
-    st.title("🛡️ 員工身份驗證")
-    email = st.text_input("輸入 Decathlon Email", placeholder="user@decathlon.com")
-    if st.button("下一步"):
-        if email.endswith("@decathlon.com"):
-            st.session_state.user = email
-            st.session_state.auth = True
-            st.rerun()
-        else:
-            st.error("只限 @decathlon.com 域名")
-    st.stop()
+# --- 第一步：自動獲取 GPS ---
+if st.button("📍 點擊獲取當前位置"):
+    get_gps_location()
+    st.info("正在連線衛星，請稍候...")
 
-# --- 主介面 ---
-st.title("🕒 Decathlon 打卡系統")
-st.write(f"當前用戶: **{st.session_state.user}**")
-
-# GPS 獲取組件 (HTML5)
-st.markdown("### 1. 獲取位置")
-if st.button("📍 點擊獲取當前 GPS"):
-    # 這段 JS 會在瀏覽器執行並回傳經緯度
-    components.html("""
-        <script>
-        navigator.geolocation.getCurrentPosition(function(pos) {
-            const coords = pos.coords.latitude + "," + pos.coords.longitude;
-            window.parent.postMessage({type: 'streamlit:setComponentValue', value: coords}, '*');
-        });
-        </script>
-    """, height=0)
-    st.info("請允許瀏覽器定位權限...")
-
-# 接收 JS 回傳的座標
-loc = st.text_input("經緯度座標", key="gps_pos", help="自動獲取後顯示")
+# 關鍵位：使用 disabled=True 限制用戶輸入
+# 用戶只能透過上面的按鈕來填入內容，唔可以自己打字
+current_loc = st.text_input(
+    "系統偵測位置 (唯讀)", 
+    key="location_val", 
+    disabled=True, 
+    placeholder="請先點擊上方按鈕獲取定位"
+)
 
 st.divider()
 
-# 打卡按鈕
-st.markdown("### 2. 選擇動作")
-col1, col2 = st.columns(2)
-col3, col4 = st.columns(2)
+# --- 第二步：打卡動作 (加入防呆機制) ---
+st.markdown("### 選擇打卡動作")
 
+# 如果未有 GPS 數據，或者出現 Error，就唔俾打卡
+is_gps_ready = current_loc and "Error" not in current_loc
+
+col1, col2 = st.columns(2)
 now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-if col1.button("🎬 上班", use_container_width=True):
-    st.success(f"紀錄成功: 上班 @ {now}")
-if col2.button("🍱 午飯開始", use_container_width=True):
-    st.success(f"紀錄成功: 午飯開始 @ {now}")
-if col3.button("☕ 午飯結束", use_container_width=True):
-    st.success(f"紀錄成功: 午飯結束 @ {now}")
-if col4.button("🏠 下班", use_container_width=True):
-    st.success(f"紀錄成功: 下班 @ {now}")
+# 使用 disabled 參數連動 GPS 狀態
+if col1.button("🎬 上班", use_container_width=True, disabled=not is_gps_ready):
+    st.success(f"【上班】紀錄成功！\n時間：{now}\n位置：{current_loc}")
 
-# 暫存紀錄
-st.divider()
-st.subheader("📝 本次作業紀錄 (暫存)")
-if 'history' not in st.session_state: st.session_state.history = []
-# 顯示最近紀錄 (模擬)
-st.table(st.session_state.history)
+if col2.button("🏠 下班", use_container_width=True, disabled=not is_gps_ready):
+    st.success(f"【下班】紀錄成功！\n時間：{now}\n位置：{current_loc}")
+
+if not is_gps_ready:
+    st.warning("⚠️ 必須成功獲取 GPS 位置後才能進行打卡。")
