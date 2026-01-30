@@ -167,10 +167,9 @@ with st.expander("🛠️ 手動修正 / 補打卡"):
 st.divider()
 st.subheader("📋 最近 5 次打卡紀錄")
 
-if recent_records:
-    # 將 List 轉為 DataFrame 顯示，比較靚
+# 確保 recent_records 唔係 None 
+if recent_records and len(recent_records) > 0:
     df = pd.DataFrame(recent_records)
-    # 顯示表格，隱藏索引 (0,1,2...)
     st.dataframe(df, use_container_width=True, hide_index=True)
 else:
-    st.info("暫無紀錄")
+    st.info("暫無紀錄 (新用戶或未有打卡資料)")
